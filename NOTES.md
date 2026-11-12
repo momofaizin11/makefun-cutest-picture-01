@@ -39,6 +39,29 @@ Both are rendered at 1024x1024 and compared on criterion 1 (stop-and-melt at one
 
 ## How it is rendered
 `tools/render.py`, numpy for masks and per-shape shading (spherical normal for round parts,
-silhouette-gradient "pillow" shading for small parts, warm bounce light for the velvety look),
-Pillow for Gaussian blur and the final LANCZOS downsample. Deterministic: fixed seed, no
-randomness in the shipped file.
+ring-normal shading for the cup's rim, cylinder shading for the cup's body, warm bounce light for
+the velvety look), Pillow for Gaussian blur and the final LANCZOS downsample. Deterministic: fixed
+seed, no randomness in the shipped file.
+
+## Which concept won, and why
+Concept A (kitten in a teacup). Both were rendered and judged. B came back incoherent: the leaf
+never read as an umbrella, the mushroom cap looked detached, the rain read as scratches across the
+whole frame, and its rain-grey mood fights cuteness. A read correctly at 300 px from the first
+render. A also has the stronger idea — the cup is the bed, and the steam that should be a wisp
+instead curls into a heart — where B is a scene of the kind seen often.
+
+## Iterations (each judged by looking at the render and its 300 px copy)
+1. v1: full scene. Judged faults: kitten read as a cat/rabbit hybrid, the tail draped on the rim
+   read as a striped sock, the cup's base was a straight cut, crumbs read as stones, the mint as a
+   bow, a halo behind the left ear, a smear for a nose.
+2. v2: pointed cat ears, cheek fur, whiskers, a bigger nose and mouth, two paws built from a palm
+   plus toe lobes, a biscuit instead of crumbs, cleaner saucer ring, no halo. Still flagged: the
+   tail (sock / bone), a cloud for the paw, the rim kinked where the tail crossed it.
+3. v3: dropped the drape, moved the steam clear of the ears, flattened the folded ear, one paw with
+   cut notches, one mint leaf, no crumbs. Flagged: the paw still a mitten; the heart unreadable.
+4. v4: tail removed for good (it never stopped reading as an arm), three separate toe lobes, an
+   explicit two-lobe heart, deeper hollow inside the cup, a bolder background, and the seam between
+   the rim's two halves closed (it had left a light line). Flagged as the strongest of the series:
+   the paw reads, the heart reads, the interior is clean.
+
+The shipped image is that last version.
