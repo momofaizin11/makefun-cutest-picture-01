@@ -98,6 +98,16 @@ def stroke_pts(points, radii, soft=1.0):
     return out
 
 
+def heart_shape(cx, cy, s, soft=3.0):
+    """Two lobes over a point: an unmistakable heart."""
+    m = np.clip(ell(cx - 0.42 * s, cy - 0.34 * s, 0.50 * s, 0.50 * s, soft=2.0)
+                + ell(cx + 0.42 * s, cy - 0.34 * s, 0.50 * s, 0.50 * s, soft=2.0)
+                + poly_mask([(cx - 0.90 * s, cy - 0.12 * s),
+                             (cx + 0.90 * s, cy - 0.12 * s),
+                             (cx, cy + 0.94 * s)], soft=soft), 0, 1)
+    return bl(m, 2.0)
+
+
 def heart(cx, cy, s, soft=1.2, rot=0.0):
     dx = (X - cx) / s
     dy = -(Y - cy) / s
@@ -161,6 +171,19 @@ def pillow(mask, base, blur=16.0, k=0.85, amb=0.58, diff=0.42, spec=0.12, sp=12,
     return _light(nx / ln, ny / ln, nz / ln, base, amb, diff, spec, sp, bounce, bcol)
 
 
+def torus_shade(mask, cx, cy, rx, ry, base, amb=0.55, diff=0.45, spec=0.14, sp=8,
+         bounce=0.10, bcol=(255, 206, 168), tilt=0.78):
+    """Smooth torus-ish shading for a rim: normal points outward around the ellipse."""
+    dx = (X - cx) / rx
+    dy = (Y - cy) / ry
+    ln = np.sqrt(dx * dx + dy * dy) + 1e-6
+    nx = dx / ln * tilt
+    ny = dy / ln * tilt
+    nz = np.full_like(nx, 0.66)
+    l = np.sqrt(nx * nx + ny * ny + nz * nz)
+    return _light(nx / l, ny / l, nz / l, base, amb, diff, spec, sp, bounce, bcol)
+
+
 def cyl(mask, cx, hw_of_y, base, amb=0.40, diff=0.58, spec=0.12, sp=10,
         bounce=0.14, bcol=(255, 200, 160)):
     hw = hw_of_y(Y)
@@ -197,7 +220,7 @@ def save(img, path):
 
 # ---------------------------------------------------------------- palette
 P = dict(
-    bg_top=(184, 213, 158),
+    bg_top=(176, 206, 148),
     bg_bot=(244, 234, 207),
     glow=(255, 250, 233),
     cup=(243, 225, 192),
@@ -244,12 +267,14 @@ def render_a():
     img = flat(img, bl(ring, 0.7), P["rim"], 0.85)
 
     # ---------------------------------------------- cup handle (behind the body)
-    h_out = ell(250, 608, 72, 86, soft=1.3)
-    h_in = ell(274, 608, 46, 60, soft=1.3)
+    h_out = ell(250, 612, 72, 88, soft=1.3)
+    h_in = ell(278, 612, 42, 56, soft=1.3)
     handle = np.clip(h_out - h_in, 0, 1)
-    img = over(img, pillow(handle, (241, 219, 182), blur=13, k=0.75, amb=0.50, diff=0.50,
+    img = over(img, pillow(handle, (230, 204, 166), blur=13, k=0.85, amb=0.46, diff=0.54,
                            spec=0.20, sp=10), handle)
     img = flat(img, np.clip(bl(handle, 2.0) - handle, 0, 1), (150, 120, 94), 0.22)
+    img = shade(img, np.clip((bl(h_out, 3.0) - h_out) + (h_in - bl(h_in, 3.0)), 0, 1) * handle,
+                0.16, (156, 124, 96))
 
     # ---------------------------------------------- cup body
     rim_cy, body_y = 470, 778
@@ -287,27 +312,24 @@ def render_a():
 
     # ---------------------------------------------- cup mouth
     mouth = ell(512, rim_cy, 272, 66, soft=1.3)
-    img = over(img, sphere(mouth, 512, rim_cy - 12, 272, 66, P["cup_in"], amb=0.74, diff=0.26,
-                           spec=0.04, sp=6, bounce=0.0), mouth)
-    img = shade(img, mouth * np.clip((412.0 - Y) / 80.0, 0, 1), 0.40, (116, 88, 62))
+    img = over(img, sphere(mouth, 512, rim_cy - 12, 272, 66, (216, 190, 158), amb=0.76,
+                           diff=0.24, spec=0.04, sp=6, bounce=0.0), mouth)
+    img = shade(img, mouth * np.clip((424.0 - Y) / 95.0, 0, 1), 0.40, (114, 88, 62))
     band = np.clip(ell(512, rim_cy, 296, 82, soft=1.2)
                    - ell(512, rim_cy, 266, 62, soft=1.2), 0, 1)
-    far = band * np.clip((rim_cy - Y) / 6.0, 0, 1)
+    w_far = np.clip((rim_cy + 8.0 - Y) / 16.0, 0, 1)
+    far = band * w_far
 
     # ---------------------------------------------- kitten: shoulders in the cup
-    shoulders = np.clip(ell(512, 512, 262, 150, soft=2.0)
-                        + ell(384, 506, 156, 108, soft=2.0)
-                        + ell(640, 506, 156, 108, soft=2.0), 0, 1) * mouth
-    img = over(img, sphere(shoulders, 512, 494, 262, 150, P["fur"], amb=0.60, diff=0.40,
-                           spec=0.08, sp=12, bounce=0.12, grain=0.05), shoulders)
-    img = shade(img, bl(ell(512, 464, 250, 134, soft=34), 34), 0.16, (128, 100, 76))
-    img = over(img, pillow(far, P["rim"], blur=15, k=0.30, amb=0.62, diff=0.38, spec=0.10,
-                           sp=8), far)
+    img = shade(img, bl(np.clip(ell(512, 588, 240, 90, soft=20), 0, 1) * mouth, 26), 0.22,
+                (122, 96, 70))
+    img = shade(img, bl(np.clip(ell(512, 456, 248, 128, soft=34), 0, 1), 34), 0.15, (128, 102, 78))
+    img = over(img, torus_shade(far, 512, rim_cy, 281, 72, P["rim"], amb=0.59, diff=0.41,
+                         spec=0.13, sp=9, tilt=0.80), far)
 
     # ---------------------------------------------- ears (behind the head)
     earL = stroke([(414, 296), (402, 244), (386, 192), (378, 148)], [86, 78, 46, 17], soft=1.4)
-    earR = stroke([(622, 292), (654, 236), (696, 206), (736, 218), (756, 250)],
-                  [86, 72, 42, 22, 11], soft=1.4)
+    earR = stroke([(618, 296), (650, 240), (684, 198), (712, 168)], [86, 76, 46, 16], soft=1.4)
     tufts = np.zeros((W, W), np.float32)
     for ty, tl in ((452, 46), (486, 40), (518, 32)):
         tufts = np.clip(tufts + stroke([(360, ty), (336, ty - 6), (318, ty + tl * 0.0)],
@@ -320,21 +342,21 @@ def render_a():
     # ---------------------------------------------- head
     hcx, hcy, hrx, hry = 505, 362, 198, 182
     head = ell(hcx, hcy, hrx, hry, soft=1.3)
-    img = shade(img, np.clip(bl(head, 7.0) - bl(head, 2.0), 0, 1) * mouth, 0.16, (140, 112, 86))
+    img = shade(img, np.clip(bl(head, 13.0) - bl(head, 2.0), 0, 1) * mouth, 0.26, (128, 100, 74))
     img = over(img, sphere(head, hcx, hcy, hrx, hry, P["fur"], amb=0.50, diff=0.50, spec=0.12,
                            sp=22, bounce=0.20, grain=0.055), head)
 
     # inner ears, only on the visible part of each ear
     vis = bl(np.clip(bl(ears, 4.0) - bl(head, 4.0), 0, 1), 1.2)
-    ieL = stroke([(406, 288), (396, 248), (384, 204), (378, 172)], [52, 44, 24, 8], soft=1.6)
+    ieL = stroke([(408, 288), (398, 246), (386, 200), (380, 166)], [50, 42, 22, 7], soft=1.6)
     ieR = stroke([(624, 286), (652, 240), (690, 214), (724, 226), (744, 252)],
                  [50, 40, 22, 10, 5], soft=1.6)
-    ieR = ieR * 0.0
+    ieR = stroke([(622, 288), (650, 242), (680, 202), (702, 176)], [50, 42, 22, 7], soft=1.6)
     inner = bl(np.clip((ieL + ieR) * vis, 0, 1), 1.6)
     img = over(img, pillow(inner, P["inner_ear"], blur=8, k=0.5, amb=0.70, diff=0.30, spec=0.05),
                inner, 0.85)
-    fold = stroke([(648, 262), (686, 240), (720, 246)], [10, 9, 7], soft=2.0)
-    img = shade(img, np.clip(fold * bl(vis, 3), 0, 1), 0.16, (176, 146, 118))
+    fold = stroke([(604, 292), (636, 268), (662, 258)], [9, 8, 6], soft=2.4)
+    img = shade(img, np.clip(fold * bl(vis, 3), 0, 1), 0.15, (176, 146, 118))
 
     # ---------------------------------------------- warm cheek fur, no hard crown marks
     img = flat(img, bl(ell(506, 452, 190, 120, soft=44), 44), (253, 238, 226), 0.18)
@@ -356,9 +378,9 @@ def render_a():
     # ---------------------------------------------- face
     face = Image.new("L", (W, W), 0)
     d = ImageDraw.Draw(face)
-    for ex in (432, 580):
-        d.arc([(ex - 46) * SS, (372 - 34) * SS, (ex + 46) * SS, (372 + 34) * SS], 20, 160,
-              fill=255, width=int(15 * SS))
+    for ex in (430, 582):
+        d.arc([(ex - 49) * SS, (368 - 38) * SS, (ex + 49) * SS, (368 + 38) * SS], 22, 158,
+              fill=255, width=int(17 * SS))
     img = flat(img, bl(np.asarray(face, np.float32) / 255.0, 0.8), P["face"])
 
     nose = poly_mask([(506, 462), (487, 442), (506, 431), (525, 442)], soft=2.4)
@@ -374,30 +396,28 @@ def render_a():
     img = flat(img, bl(np.asarray(mm_, np.float32) / 255.0, 0.7), P["face"], 0.9)
 
     # ---------------------------------------------- near lip
-    near = band * np.clip((Y - rim_cy) / 6.0, 0, 1)
-    img = over(img, pillow(near, P["rim"], blur=15, k=0.30, amb=0.62, diff=0.38, spec=0.10,
-                           sp=8), near)
+    near = band * (1.0 - w_far)
+    img = over(img, torus_shade(near, 512, rim_cy, 281, 72, P["rim"], amb=0.58, diff=0.42,
+                         spec=0.14, sp=9, tilt=0.80), near)
     img = shade(img, bl(ell(512, 440, 210, 130, soft=40), 26), 0.20, (118, 94, 72))
 
 
     # ---------------------------------------------- paw tucked under the chin
-    for cx0, cy0, pw, ph, tro, spread in ((452, 552, 76, 42, 23, 44),):
+    for cx0, cy0, pw, ph, tro, spread in ((452, 566, 66, 35, 24, 42),):
         m = ell(cx0, cy0, pw, ph, soft=2.0)
         for dx in (-spread, 0, spread):
-            m = np.clip(m + ell(cx0 + dx, cy0 - ph + tro * 0.5, tro, tro, soft=2.0), 0, 1)
-        for dx in (-spread * 0.5, spread * 0.5):
-            m = np.clip(m - ell(cx0 + dx, cy0 - ph + tro * 0.28, 8.5, 10.0, soft=2.2), 0, 1)
-        img = flat(img, np.clip(bl(m, 1.7) - m, 0, 1), (168, 138, 112), 0.42)
+            m = np.clip(m + ell(cx0 + dx, cy0 - 50, tro, tro, soft=2.0), 0, 1)
+        img = flat(img, np.clip(bl(m, 1.5) - m, 0, 1), (168, 138, 112), 0.60)
         img = shade(img, bl(np.clip(m - np.roll(m, 8, axis=0), 0, 1) * np.clip(
-            (Y - (cy0 - ph * 0.1)) / 26.0, 0, 1), 5.0), 0.30, (140, 112, 88))
-        img = over(img, sphere(m, cx0 - pw * 0.05, cy0 - ph * 0.85, pw * 1.05, ph * 1.5,
-                               (255, 253, 249), amb=0.62, diff=0.38, spec=0.12, sp=10,
-                               bounce=0.16), m)
+            (Y - (cy0 - ph * 0.1)) / 26.0, 0, 1), 5.0), 0.36, (138, 110, 86))
+        img = over(img, sphere(m, cx0 - pw * 0.05, cy0 - ph * 0.75, pw * 1.05, ph * 1.6,
+                               (247, 238, 224), amb=0.60, diff=0.40, spec=0.12, sp=10,
+                               bounce=0.20), m)
         img = shade(img, m * np.clip((cy0 - ph * 0.35 - Y) / 30.0, 0, 1), 0.16, (150, 124, 102))
         for dx in (-spread * 0.5, spread * 0.5):
-            cr = stroke([(cx0 + dx, cy0 - ph + tro * 0.72), (cx0 + dx, cy0 - ph * 0.22)],
-                        [3.6, 2.4], soft=0.7)
-            img = shade(img, np.clip(cr * m, 0, 1), 0.34, (140, 114, 92))
+            cr = stroke([(cx0 + dx, cy0 - 62), (cx0 + dx, cy0 - 22)],
+                        [4.2, 2.6], soft=0.7)
+            img = shade(img, np.clip(cr * m, 0, 1), 0.30, (146, 120, 98))
 
     # ---------------------------------------------- tail curled around the rim
     if os.environ.get("FLICK", "0") == "1":
@@ -409,16 +429,17 @@ def render_a():
                    tail)
 
     # ---------------------------------------------- biscuit crumbs
-    img = shade(img, bl(ell(704, 872, 92, 34, soft=10), 12), 0.24, (140, 118, 96))
-    for (cx0, cy0, ang, ln, wd) in ((706, 858, -0.22, 112, 38),):
+    img = shade(img, bl(ell(628, 862, 84, 30, soft=10), 12), 0.24, (140, 118, 96))
+    for (cx0, cy0, ang, ln, wd) in ((630, 852, -0.26, 108, 36),):
         ux, uy = math.cos(ang), math.sin(ang)
         path = [(cx0 - ux * ln * 0.5, cy0 - uy * ln * 0.5),
                 (cx0, cy0),
                 (cx0 + ux * ln * 0.5, cy0 + uy * ln * 0.5)]
         lf = stroke(path, [wd * 0.42, wd * 0.52, 2.0], soft=1.8)
-        img = over(img, pillow(lf, P["mint"], blur=13, k=0.7, amb=0.52, diff=0.48, spec=0.14), lf)
-        img = flat(img, np.clip(stroke(path, [wd * 0.08, wd * 0.09, 1.0], soft=1.0) * lf, 0, 1),
-                   (94, 132, 72), 0.7)
+        img = over(img, pillow(lf, (152, 188, 130), blur=13, k=0.7, amb=0.56, diff=0.44,
+                               spec=0.14), lf)
+        img = flat(img, np.clip(stroke(path, [wd * 0.10, wd * 0.11, 1.0], soft=1.0) * lf, 0, 1),
+                   (104, 140, 84), 0.72)
 
     # ---------------------------------------------- mint sprig
     img = shade(img, bl(ell(700, 884, 78, 26, soft=10), 12), 0.22, (140, 118, 96))
@@ -435,14 +456,15 @@ def render_a():
         img = flat(img, np.clip(ve * lf, 0, 1), (96, 136, 74), 0.72)
 
     # ---------------------------------------------- steam that curls into a heart
-    wisp = stroke([(288, 418), (272, 384), (268, 352), (256, 322), (248, 296)],
-                  [17, 18, 15, 12, 9], soft=1.2)
-    img = flat(img, bl(wisp, 15), P["steam"], 0.56)
-    conn = stroke([(248, 296), (240, 288), (236, 282)], [10, 8, 6], soft=1.2)
+    wisp = stroke([(304, 414), (288, 380), (276, 348), (264, 322)],
+                  [17, 18, 14, 10], soft=1.2)
+    img = flat(img, bl(wisp, 15), P["steam"], 0.60)
+    conn = stroke([(264, 322), (256, 316), (252, 312)], [11, 9, 7], soft=1.2)
     img = flat(img, bl(conn, 11), P["steam"], 0.55)
-    img = flat(img, bl(heart(232, 236, 58, soft=2.2), 8), P["steam"], 0.72)
-    wisp2 = stroke([(744, 424), (758, 388), (752, 352), (764, 320)], [11, 13, 10, 6], soft=1.2)
-    img = flat(img, bl(wisp2, 16), P["steam"], 0.46)
+    hsh = heart_shape(250, 260, 68)
+    img = shade(img, bl(hsh, 12.0), 0.10, (126, 128, 98))
+    img = flat(img, bl(hsh, 8.0), (255, 254, 250), 0.70)
+    img = flat(img, bl(heart_shape(249, 258, 62), 8.0), (255, 255, 255), 0.32)
 
     return img
 
