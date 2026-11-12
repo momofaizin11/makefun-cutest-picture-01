@@ -243,6 +243,7 @@ P = dict(
 
 
 def render_a():
+    it = float(os.environ.get("ITER", "0"))
     img = np.zeros((W, W, 3), np.float32)
 
     # ---------------------------------------------- background
@@ -275,6 +276,10 @@ def render_a():
     img = flat(img, np.clip(bl(handle, 2.0) - handle, 0, 1), (150, 120, 94), 0.22)
     img = shade(img, np.clip((bl(h_out, 3.0) - h_out) + (h_in - bl(h_in, 3.0)), 0, 1) * handle,
                 0.16, (156, 124, 96))
+    # clean silhouette gap between handle and cup wall
+    gap = ell(286, 612, 18, 92, soft=4.0)
+    img = shade(img, np.clip(gap * handle, 0, 1), 0.48, (72, 54, 44))
+    img = flat(img, np.clip(bl(handle, 2.6) - handle, 0, 1), (110, 86, 68), 0.42)
 
     # ---------------------------------------------- cup body
     rim_cy, body_y = 470, 778
@@ -343,8 +348,16 @@ def render_a():
     hcx, hcy, hrx, hry = 505, 362, 198, 182
     head = ell(hcx, hcy, hrx, hry, soft=1.3)
     img = shade(img, np.clip(bl(head, 13.0) - bl(head, 2.0), 0, 1) * mouth, 0.26, (128, 100, 74))
-    img = over(img, sphere(head, hcx, hcy, hrx, hry, P["fur"], amb=0.50, diff=0.50, spec=0.12,
-                           sp=22, bounce=0.20, grain=0.055), head)
+    img = over(img, sphere(head, hcx, hcy, hrx, hry, P["fur"], amb=0.54, diff=0.46, spec=0.0,
+                           sp=30, bounce=0.24, bcol=(255, 214, 184), grain=0.035), head)
+    # matte directional fur: soft tufts + a gentle top-left light wash (no gloss)
+    for path, rads in (([(352, 300), (322, 326), (302, 362)], [7, 5, 2]),
+                       ([(660, 296), (688, 324), (708, 360)], [7, 5, 2]),
+                       ([(432, 214), (472, 198), (520, 196)], [6, 5, 2])):
+        tuft_h = stroke(path, rads, soft=2.2)
+        img = shade(img, np.clip(tuft_h * head, 0, 1), 0.055, (152, 122, 96))
+    img = flat(img, bl(head, 40) * np.clip((360.0 - Y) / 300.0, 0, 1) * head, (255, 253, 246),
+               0.10)
 
     # inner ears, only on the visible part of each ear
     vis = bl(np.clip(bl(ears, 4.0) - bl(head, 4.0), 0, 1), 1.2)
@@ -402,22 +415,23 @@ def render_a():
     img = shade(img, bl(ell(512, 440, 210, 130, soft=40), 26), 0.20, (118, 94, 72))
 
 
-    # ---------------------------------------------- paw tucked under the chin
-    for cx0, cy0, pw, ph, tro, spread in ((452, 566, 66, 35, 24, 42),):
-        m = ell(cx0, cy0, pw, ph, soft=2.0)
-        for dx in (-spread, 0, spread):
-            m = np.clip(m + ell(cx0 + dx, cy0 - 50, tro, tro, soft=2.0), 0, 1)
-        img = flat(img, np.clip(bl(m, 1.5) - m, 0, 1), (168, 138, 112), 0.60)
-        img = shade(img, bl(np.clip(m - np.roll(m, 8, axis=0), 0, 1) * np.clip(
-            (Y - (cy0 - ph * 0.1)) / 26.0, 0, 1), 5.0), 0.36, (138, 110, 86))
-        img = over(img, sphere(m, cx0 - pw * 0.05, cy0 - ph * 0.75, pw * 1.05, ph * 1.6,
-                               (247, 238, 224), amb=0.60, diff=0.40, spec=0.12, sp=10,
-                               bounce=0.20), m)
-        img = shade(img, m * np.clip((cy0 - ph * 0.35 - Y) / 30.0, 0, 1), 0.16, (150, 124, 102))
-        for dx in (-spread * 0.5, spread * 0.5):
-            cr = stroke([(cx0 + dx, cy0 - 62), (cx0 + dx, cy0 - 22)],
-                        [4.2, 2.6], soft=0.7)
-            img = shade(img, np.clip(cr * m, 0, 1), 0.30, (146, 120, 98))
+    # ---------------------------------------------- two paws gripping the front rim
+    for px in (406, 618):
+        cx0, cy0, pw, ph = px, 520, 38, 27
+        paw = ell(cx0, cy0, pw, ph, soft=1.6)
+        for dx in (-17, 0, 17):
+            paw = np.clip(paw + ell(cx0 + dx, cy0 - 26, 13, 14, soft=1.6), 0, 1)
+        img = flat(img, np.clip(bl(paw, 1.5) - paw, 0, 1), (150, 120, 94), 0.60)
+        img = over(img, sphere(paw, cx0 - 4, cy0 - 8, pw, ph * 1.2, P["paw"], amb=0.58,
+                               diff=0.42, spec=0.0, sp=10, bounce=0.24,
+                               bcol=(255, 210, 180)), paw)
+        img = shade(img, np.clip(bl(paw, 5.0) - paw, 0, 1), 0.30, (128, 104, 82))
+        for dx in (-9, 9):
+            cr = stroke([(cx0 + dx, cy0 - 38), (cx0 + dx * 1.6, cy0 + 14)], [4.6, 3.0],
+                        soft=0.7)
+            img = shade(img, np.clip(cr * paw, 0, 1), 0.55, (134, 106, 82))
+        tip = stroke([(cx0, cy0 - 40), (cx0, cy0 + 8)], [5.0, 3.2], soft=0.7)
+        img = shade(img, np.clip(tip * paw, 0, 1), 0.22, (146, 118, 94))
 
     # ---------------------------------------------- tail curled around the rim
     if os.environ.get("FLICK", "0") == "1":
@@ -441,30 +455,45 @@ def render_a():
         img = flat(img, np.clip(stroke(path, [wd * 0.10, wd * 0.11, 1.0], soft=1.0) * lf, 0, 1),
                    (104, 140, 84), 0.72)
 
-    # ---------------------------------------------- mint sprig
-    img = shade(img, bl(ell(700, 884, 78, 26, soft=10), 12), 0.22, (140, 118, 96))
-    stem = stroke([(700, 900), (708, 872), (704, 846), (698, 818)], [5.5, 5.0, 4.2, 3.0],
-                  soft=1.2)
-    img = flat(img, stem, (108, 148, 86))
-    for path, rads in (([(700, 830), (682, 804), (668, 776)], [15, 11, 2]),
-                       ([(706, 826), (728, 800), (742, 772)], [15, 11, 2]),
-                       ([(704, 858), (736, 850), (766, 836)], [14, 10, 2])):
-        lf = stroke(path, rads, soft=1.8)
-        img = over(img, pillow(lf, P["mint"], blur=12, k=0.72, amb=0.50, diff=0.50, spec=0.14),
-                   lf)
-        ve = stroke(path, [r * 0.17 for r in rads], soft=1.0)
-        img = flat(img, np.clip(ve * lf, 0, 1), (96, 136, 74), 0.72)
+    # ---------------------------------------------- one bold mint leaf on the saucer
+    img = shade(img, bl(ell(720, 860, 84, 26, soft=10), 12), 0.22, (140, 118, 96))
+    stem_m = stroke([(694, 892), (686, 880), (678, 872)], [3.2, 2.8, 2.2], soft=0.9)
+    img = flat(img, stem_m, (108, 148, 86), 0.95)
+    leaf = poly_mask([(668, 872), (698, 879), (730, 877), (755, 864), (775, 844),
+                      (785, 820), (786, 796), (764, 787), (738, 787), (711, 797),
+                      (689, 814), (674, 842)], soft=1.5)
+    img = shade(img, np.clip(bl(leaf, 1.7) - leaf, 0, 1), 0.30, (74, 104, 58))
+    img = over(img, pillow(leaf, P["mint"], blur=8, k=0.68, amb=0.56, diff=0.44, spec=0.05),
+               leaf)
+    img = flat(img, np.clip(stroke([(672, 868), (722, 838), (782, 798)], [2.6, 2.0, 1.2],
+                                   soft=0.8) * leaf, 0, 1), (84, 122, 64), 0.65)
+    for a, b in (((709, 845), (730, 876)), ((709, 845), (689, 815)),
+                 ((733, 830), (754, 862)), ((733, 830), (711, 798))):
+        img = flat(img, np.clip(stroke([a, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), b],
+                                       [1.6, 1.3, 0.9], soft=0.8) * leaf, 0, 1), (84, 122, 64), 0.45)
 
-    # ---------------------------------------------- steam that curls into a heart
-    wisp = stroke([(304, 414), (288, 380), (276, 348), (264, 322)],
-                  [17, 18, 14, 10], soft=1.2)
-    img = flat(img, bl(wisp, 15), P["steam"], 0.60)
-    conn = stroke([(264, 322), (256, 316), (252, 312)], [11, 9, 7], soft=1.2)
-    img = flat(img, bl(conn, 11), P["steam"], 0.55)
-    hsh = heart_shape(250, 260, 68)
-    img = shade(img, bl(hsh, 12.0), 0.10, (126, 128, 98))
-    img = flat(img, bl(hsh, 8.0), (255, 254, 250), 0.70)
-    img = flat(img, bl(heart_shape(249, 258, 62), 8.0), (255, 255, 255), 0.32)
+    # ---------------------------------------------- three separate curls of steam
+    steam = np.zeros((W, W), np.float32)
+    for path, rads in (([(146, 418), (176, 370), (138, 320), (168, 268), (140, 222)],
+                        [14, 12, 10, 8, 6]),
+                       ([(208, 432), (240, 380), (198, 326), (230, 274), (202, 226)],
+                        [14, 12, 10, 8, 6]),
+                       ([(272, 436), (302, 382), (260, 328), (292, 276), (266, 234)],
+                        [12, 10, 9, 7, 5])):
+        steam = np.clip(steam + stroke(path, rads, soft=1.0), 0, 1)
+    img = flat(img, bl(steam, 10.0), (244, 249, 255), 0.26)
+    img = flat(img, bl(steam, 3.2), (250, 252, 255), 0.48)
+    img = flat(img, np.clip(steam, 0, 1), (253, 254, 255), 0.74 + 0.02 * it)
+
+    # ---------------------------------------------- teabag tag on the near rim
+    string = stroke([(548, 500), (566, 540), (586, 574)], [1.7, 1.5, 1.2], soft=1.0)
+    img = flat(img, string, (168, 148, 118), 0.60)
+    tag = poly_mask([(586, 574), (576, 606), (610, 614), (618, 582)], soft=1.6)
+    img = over(img, pillow(tag, (250, 245, 233), blur=6, k=0.6, amb=0.64, diff=0.36,
+                           spec=0.04), tag)
+    img = flat(img, np.clip(bl(tag, 1.4) - tag, 0, 1), (150, 128, 102), 0.35)
+    tln = stroke([(592, 586), (596, 600), (606, 602)], [1.9, 1.9, 1.6], soft=0.7)
+    img = flat(img, np.clip(tln * tag, 0, 1), (160, 140, 112), 0.50)
 
     return img
 
